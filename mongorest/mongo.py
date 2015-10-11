@@ -31,7 +31,7 @@ def from_json(content):
     try:
         return json_util.loads(content)
     except JSONDecodeError:
-        abort(400)
+        raise ApiError('Bad JSON received', payload=content, status_code=400)
 
 
 class ApiError(Exception):

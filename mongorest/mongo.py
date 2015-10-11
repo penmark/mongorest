@@ -1,7 +1,8 @@
-from bson import json_util, ObjectId
+from json import JSONDecodeError
 from flask import Blueprint, current_app, g, request, abort
 from flask.views import MethodView
 from pymongo import uri_parser, MongoClient
+from pymongo.errors import OperationFailure
 from werkzeug.local import LocalProxy
 from bson import json_util, ObjectId
 from bson.errors import InvalidId
@@ -11,7 +12,7 @@ from werkzeug.routing import BaseConverter
 mongo = Blueprint('mongo', __name__, url_prefix='/<collection>')
 
 
-def jsonify(data):
+def to_json(data):
     indent = None
     separators = (',', ':')
     if not request.is_xhr:
@@ -22,16 +23,44 @@ def jsonify(data):
         mimetype='application/json')
 
 
-@mongo.errorhandler(404)
+def from_json(content):
+    try:
+        return json_util.loads(content)
+    except JSONDecodeError:
+        abort(400)
+
+
+class ApiError(Exception):
+    status_code = 400
+
+    def __init__(self, message, payload=None, exception=None, status_code=None):
+        Exception.__init__(self)
+        self.message = message
+        self.exception = exception
+        if status_code is not None:
+            self.status_code = status_code
+        self.payload = payload
+
+    def as_dict(self):
+        rv = dict(self.payload or ())
+        rv['message'] = self.message
+        try:
+            rv['exception'] = self.exception.details
+        except AttributeError:
+            rv['exception'] = str(self.exception)
+        return rv
+
+
+@mongo.errorhandler(ApiError)
 def errorhandler(e):
-    return jsonify(dict(error=e.name)), e.code
+    return to_json(e.as_dict()), e.status_code
 
 
 @mongo.url_value_preprocessor
 def pull_collection(endpoint, values):
     c = values.pop('collection')
     if c not in current_app.config.get('MONGO_COLLECTIONS'):
-        abort(404)
+        raise ApiError('Not found', status_code=404)
     g.collection = c
 
 
@@ -45,8 +74,8 @@ class MongoView(MethodView):
         collection = db[g.collection]
         item = collection.find_one(object_id)
         if not item:
-            abort(404)
-        return jsonify(item)
+            raise ApiError('Not found', status_code=404)
+        return to_json(item)
 
     def find(self):
         collection = db[g.collection]
@@ -55,31 +84,37 @@ class MongoView(MethodView):
         query = request.args.get('query')
         projection = request.args.get('projection')
         if query:
-            query = json_util.loads(query)
+            query = from_json(query)
         if projection:
-            projection = json_util.loads(projection)
+            projection = from_json(projection)
         result = collection.find(query, projection).limit(limit).skip(skip)
-        return jsonify(result)
+        return to_json(result)
 
     def url(self, object_id):
         return '{}://{}/{}/{}'.format(request.scheme, request.host, g.collection, object_id)
 
     def post(self):
-        data = json_util.loads(request.data.decode(request.charset))
+        data = from_json(request.data.decode(request.charset))
         collection = db[g.collection]
-        result = collection.insert_one(data)
+        try:
+            result = collection.insert_one(data)
+        except OperationFailure as e:
+            raise ApiError('Bad request', payload=data, exception=e, status_code=400)
         url = self.url(str(result.inserted_id))
-        return jsonify(dict(result=url)), 201
+        return to_json(dict(result=url)), 201
 
     def put(self, object_id):
         collection = db[g.collection]
-        data = json_util.loads(request.data.decode(request.charset))
-        result = collection.update_one({'_id': object_id}, data)
-        return jsonify(dict(acknowledged=result.acknowledged))
+        data = from_json(request.data.decode(request.charset))
+        try:
+            result = collection.update_one({'_id': object_id}, data)
+        except OperationFailure as e:
+            raise ApiError('Bad request', payload=data, exception=e, status_code=400)
+        return to_json(dict(acknowledged=result.acknowledged))
 
     def delete(self, object_id):
         collection = db[g.collection]
-        collection.delete_one({'_id': ObjectId(object_id)})
+        collection.delete_one({'_id': object_id})
         return '', 204
 
 

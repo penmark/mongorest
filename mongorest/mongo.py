@@ -48,10 +48,11 @@ class ApiError(Exception):
     def as_dict(self):
         rv = dict(self.payload or ())
         rv['message'] = self.message
-        try:
-            rv['exception'] = self.exception.details
-        except AttributeError:
-            rv['exception'] = str(self.exception)
+        if self.exception:
+            try:
+                rv['exception'] = self.exception.details
+            except AttributeError:
+                rv['exception'] = str(self.exception)
         return rv
 
 

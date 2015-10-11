@@ -1,4 +1,8 @@
-from json import JSONDecodeError
+try:
+    # python 3.5
+    from json import JSONDecodeError
+except ImportError:
+    JSONDecodeError = ValueError
 from flask import Blueprint, current_app, g, request, abort
 from flask.views import MethodView
 from pymongo import uri_parser, MongoClient

@@ -73,11 +73,9 @@ class MongoView(MethodView):
 
     def put(self, object_id):
         collection = db[g.collection]
-        doc_id = ObjectId(object_id)
         data = json_util.loads(request.data.decode(request.charset))
-        result = collection.update_one({'_id': doc_id}, {'$set': data}, upsert=True)
-        url = self.url(str(result.upserted_id or doc_id))
-        return jsonify(dict(result=url)), 201
+        result = collection.update_one({'_id': object_id}, data)
+        return jsonify(dict(acknowledged=result.acknowledged))
 
     def delete(self, object_id):
         collection = db[g.collection]

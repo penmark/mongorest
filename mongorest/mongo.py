@@ -130,7 +130,7 @@ class MongoView(MethodView):
         collection = db[g.collection]
         data = from_json(request.data.decode(request.charset))
         if '$currentDate' not in data:
-            data['$currentDate'] = {'modified', True}
+            data['$currentDate'] = dict(modified=True)
         try:
             result = collection.update_one({'_id': object_id}, data)
         except OperationFailure as e:

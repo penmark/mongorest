@@ -9,7 +9,7 @@ class DefaultSettings(object):
 def make_app():
     app = Flask(__name__)
     app.config.from_object('mongorest.DefaultSettings')
-    app.config.from_envvar('MONGOREST_SETTINGS', silent=True)
+    app.config.from_envvar('MONGOREST_SETTINGS')
     from .mongo import mongo, OidConverter
     app.url_map.converters['oid'] = OidConverter
     app.register_blueprint(mongo)

@@ -16,6 +16,18 @@ from werkzeug.routing import BaseConverter
 mongo = Blueprint('mongo', __name__, url_prefix='/<collection>')
 
 
+def get_mongodb():
+    db_inst = getattr(g, 'mongodb', None)
+    if not db_inst:
+        mongo_uri = current_app.config.get('MONGO_URI', None)
+        parsed = uri_parser.parse_uri(mongo_uri)
+        db_inst = g.mongodb = MongoClient(mongo_uri)[parsed.get('database')]
+    return db_inst
+
+
+db = LocalProxy(get_mongodb)
+
+
 def to_json(data):
     indent = None
     separators = (',', ':')
@@ -87,20 +99,26 @@ class MongoView(MethodView):
         limit = int(request.args.get('limit', 0))
         skip = int(request.args.get('skip', 0))
         query = request.args.get('query')
+        sort = request.args.get('sort')
         projection = request.args.get('projection')
         if query:
             query = from_json(query)
         if projection:
             projection = from_json(projection)
         result = collection.find(query, projection).limit(limit).skip(skip)
+        if sort:
+            sort = from_json(sort)
+            result.sort(sort)
         return to_json(result)
 
     def url(self, object_id):
         return '{}://{}/{}/{}'.format(request.scheme, request.host, g.collection, object_id)
 
     def post(self):
-        data = from_json(request.data.decode(request.charset))
         collection = db[g.collection]
+        data = from_json(request.data.decode(request.charset))
+        if '$currentDate' not in data:
+            data['$currentDate'] = dict(created=True, modified=True)
         try:
             result = collection.insert_one(data)
         except OperationFailure as e:
@@ -111,6 +129,8 @@ class MongoView(MethodView):
     def put(self, object_id):
         collection = db[g.collection]
         data = from_json(request.data.decode(request.charset))
+        if '$currentDate' not in data:
+            data['$currentDate'] = {'modified', True}
         try:
             result = collection.update_one({'_id': object_id}, data)
         except OperationFailure as e:
@@ -138,15 +158,3 @@ mongo_view = MongoView.as_view('mongo_view')
 mongo.add_url_rule('/', defaults={'object_id': None}, view_func=mongo_view, methods=['GET'])
 mongo.add_url_rule('/', view_func=mongo_view, methods=['POST'])
 mongo.add_url_rule('/<oid:object_id>', view_func=mongo_view, methods=['GET', 'PUT', 'DELETE'])
-
-
-def get_mongodb():
-    db_inst = getattr(g, 'mongodb', None)
-    if not db_inst:
-        mongo_uri = current_app.config.get('MONGO_URI', None)
-        parsed = uri_parser.parse_uri(mongo_uri)
-        db_inst = g.mongodb = MongoClient(mongo_uri)[parsed.get('database')]
-    return db_inst
-
-
-db = LocalProxy(get_mongodb)

@@ -3,7 +3,7 @@ from flask import Flask
 
 class DefaultSettings(object):
     MONGO_URI = 'mongodb://localhost/media'
-    MONGO_COLLECTIONS = ['items']
+    MONGO_COLLECTIONS = ['item', 'root']
 
 
 def make_app():

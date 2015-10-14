@@ -11,7 +11,7 @@ from werkzeug.local import LocalProxy
 from bson import json_util, ObjectId
 from bson.errors import InvalidId
 from werkzeug.routing import BaseConverter
-
+from datetime import datetime
 
 mongo = Blueprint('mongo', __name__, url_prefix='/<collection>')
 
@@ -117,14 +117,15 @@ class MongoView(MethodView):
     def post(self):
         collection = db[g.collection]
         data = from_json(request.data.decode(request.charset))
-        if '$currentDate' not in data:
-            data['$currentDate'] = dict(created=True, modified=True)
+        data['modified'] = data['created'] = datetime.now()
         try:
             result = collection.insert_one(data)
         except OperationFailure as e:
             raise ApiError('Bad request', payload=data, exception=e, status_code=400)
         url = self.url(str(result.inserted_id))
-        return to_json(dict(result=url)), 201
+        response = to_json(dict(result=url))
+        response.headers['Location'] = url
+        return response, 201
 
     def put(self, object_id):
         collection = db[g.collection]

@@ -149,7 +149,7 @@ class OidConverter(BaseConverter):
         try:
             return ObjectId(value)
         except InvalidId:
-            raise abort(400)
+            raise ApiError('Invalid ObjectId: {}'.format(value), status_code=400)
 
     def to_url(self, value):
         return str(value)
@@ -159,3 +159,4 @@ mongo_view = MongoView.as_view('mongo_view')
 mongo.add_url_rule('/', defaults={'object_id': None}, view_func=mongo_view, methods=['GET'])
 mongo.add_url_rule('/', view_func=mongo_view, methods=['POST'])
 mongo.add_url_rule('/<oid:object_id>', view_func=mongo_view, methods=['GET', 'PUT', 'DELETE'])
+

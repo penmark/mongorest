@@ -6,9 +6,9 @@ setup(
     version='0.0.1',
     packages=find_packages(exclude=['mongorest.tests']),
     install_requires="""
-        pymongo==3.0.3
-        flask==0.10.1
-        flask-socketio==0.6.0
+        pymongo==3.3.0
+        flask==0.11.1
+        flask-socketio==2.7.1
     """,
     tests_require=['nose'],
     test_suite='mongorest.tests',
